@@ -1,0 +1,24 @@
+# TrillBar Studio — Backend Dependencies
+# Install: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+
+# Database
+sqlalchemy>=2.0.37  # 2.0.37+ fixes typing_extensions >= 4.12 compatibility
+alembic==1.13.2
+
+# Audio/Video processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+soundfile==0.12.1
+
+# AI APIs (cloud — no local GPU needed)
+groq>=0.13.0
+elevenlabs>=1.50.0
+
+# Utilities
+python-multipart==0.0.9
+httpx==0.27.2
+numpy>=1.26.4
