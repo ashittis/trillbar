@@ -4,13 +4,14 @@ from sqlalchemy.orm import Session as DBSession
 
 from db.database import get_db
 from db.models import Session
+import config
 
 router = APIRouter()
 
 
 class SessionCreate(BaseModel):
     name: str = "Untitled Episode"
-    source_language: str = "ja"
+    source_language: str = "auto"
     target_language: str = "hi"
 
 
@@ -30,6 +31,14 @@ class SessionUpdate(BaseModel):
     name: str | None = None
     source_language: str | None = None
     target_language: str | None = None
+
+
+@router.get("/languages")
+def get_languages():
+    return {
+        "source": config.SOURCE_LANGUAGES,
+        "target": config.TARGET_LANGUAGES,
+    }
 
 
 @router.post("", response_model=SessionOut, status_code=201)

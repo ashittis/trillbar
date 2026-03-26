@@ -120,6 +120,8 @@ export const api = {
     list: () => request<SessionOut[]>("/api/sessions"),
     update: (id: string, body: Partial<Pick<SessionOut, "name" | "source_language" | "target_language">>) =>
       request<SessionOut>(`/api/sessions/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+    delete: (id: string) => request<void>(`/api/sessions/${id}`, { method: "DELETE" }),
+    languages: () => request<{ source: Record<string, string>; target: Record<string, string> }>("/api/sessions/languages"),
   },
 
   // Video upload with XHR progress

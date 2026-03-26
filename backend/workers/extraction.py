@@ -177,7 +177,8 @@ def run_extraction_pipeline(session_id: str, job_id: str) -> None:
             try:
                 _job_update(db, job, 40, "Running pyannote speaker diarization...")
                 segments = _diarize_with_pyannote(audio_path)
-            except Exception:
+            except Exception as e:
+                _job_update(db, job, 45, f"Speaker diarization failed ({e}), using single-speaker mode...")
                 segments = _diarize_single_speaker(duration)
         else:
             segments = _diarize_single_speaker(duration)
@@ -258,11 +259,10 @@ def run_extraction_pipeline(session_id: str, job_id: str) -> None:
                         continue
                     try:
                         with open(clip, "rb") as f:
-                            result = groq_client.audio.transcriptions.create(
-                                model="whisper-large-v3-turbo",
-                                file=f,
-                                language=session.source_language,
-                            )
+                            kwargs = {"model": "whisper-large-v3-turbo", "file": f}
+                            if session.source_language and session.source_language != "auto":
+                                kwargs["language"] = session.source_language
+                            result = groq_client.audio.transcriptions.create(**kwargs)
                         line.transcript_text = result.text
                     except Exception:
                         pass  # skip this line, leave transcript null

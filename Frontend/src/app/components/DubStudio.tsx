@@ -162,8 +162,9 @@ function Slider({ label, min, max, step, value, onChange, format }: {
 // ---------------------------------------------------------------------------
 // Takes/Synthesis Panel for active dialogue line
 // ---------------------------------------------------------------------------
-function LineWorkArea({ line, actors, sessionId }: {
+function LineWorkArea({ line, actors, sessionId, voiceSettings }: {
   line: DialogueLineOut; actors: ActorOut[]; sessionId: string;
+  voiceSettings: { stability: number; similarity: number; pitch: number };
 }) {
   const queryClient = useQueryClient();
   const recorder = useAudioRecorder();
@@ -197,8 +198,9 @@ function LineWorkArea({ line, actors, sessionId }: {
           setSynthJobId(null);
           es.close();
         }
-      } catch { /* ignore */ }
+      } catch { /* malformed SSE event, skip */ }
     };
+    es.onerror = () => { toast.error("Lost connection to synthesis job"); es.close(); setSynthJobId(null); };
     return () => es.close();
   }, [synthJobId, sessionId, refetchTakes]);
 
@@ -219,6 +221,11 @@ function LineWorkArea({ line, actors, sessionId }: {
 
   const handleSynthesize = async (takeId: string) => {
     try {
+      await api.dubStudio.updateTake(sessionId, takeId, {
+        stability: voiceSettings.stability,
+        similarity_boost: voiceSettings.similarity,
+        pitch_shift: voiceSettings.pitch,
+      });
       const { job_id } = await api.dubStudio.synthesizeTake(sessionId, takeId);
       setSynthJobId(job_id);
       refetchTakes();
@@ -232,7 +239,9 @@ function LineWorkArea({ line, actors, sessionId }: {
       await api.dubStudio.updateTake(sessionId, takeId, { approved: !approved });
       refetchTakes();
       queryClient.invalidateQueries({ queryKey: ["dub-lines", sessionId] });
-    } catch { /* ignore */ }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update approval");
+    }
   };
 
   const dur = line.end_time - line.start_time;
@@ -349,8 +358,18 @@ export function DubStudio() {
   const queryClient = useQueryClient();
   const sessionId = useStudioStore((s) => s.sessionId);
   const session = useStudioStore((s) => s.session);
+  const setSession = useStudioStore((s) => s.setSession);
   const activeLineId = useStudioStore((s) => s.activeDialogueLineId);
   const setActiveLineId = useStudioStore((s) => s.setActiveDialogueLineId);
+
+  // Refetch session on mount to ensure video_path and status are fresh
+  useEffect(() => {
+    if (sessionId) {
+      api.sessions.get(sessionId).then(setSession).catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to load session");
+      });
+    }
+  }, [sessionId]);
 
   const [renderJobId, setRenderJobId] = useState<string | null>(null);
   const [renderProgress, setRenderProgress] = useState(0);
@@ -405,8 +424,9 @@ export function DubStudio() {
         setRenderProgress(ev.progress);
         if (ev.status === "done") { setRenderDone(true); es.close(); }
         if (ev.status === "failed") { toast.error(ev.error || "Render failed"); es.close(); }
-      } catch { /* ignore */ }
+      } catch { /* malformed SSE event, skip */ }
     };
+    es.onerror = () => { toast.error("Lost connection to render job"); es.close(); };
     return () => es.close();
   }, [renderJobId, sessionId]);
 
@@ -508,7 +528,7 @@ export function DubStudio() {
 
           {/* Takes/Synthesis work area */}
           {activeLine ? (
-            <LineWorkArea line={activeLine} actors={actors} sessionId={sessionId} />
+            <LineWorkArea line={activeLine} actors={actors} sessionId={sessionId} voiceSettings={{ stability, similarity, pitch }} />
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <span className="text-[13px]" style={{ color: "var(--studio-text-muted)" }}>Select a dialogue line to start dubbing</span>

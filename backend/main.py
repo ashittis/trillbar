@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 
 from db.database import init_db
 from api import sessions, upload, voice_lab, dub_studio
+import config
 
 
 @asynccontextmanager
@@ -34,7 +35,7 @@ app = FastAPI(title="TrillBar Studio API", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -48,4 +49,11 @@ app.include_router(dub_studio.router, prefix="/api/sessions", tags=["dub-studio"
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "services": {
+            "elevenlabs": bool(config.ELEVENLABS_API_KEY),
+            "groq": bool(config.GROQ_API_KEY),
+            "pyannote": bool(config.HF_TOKEN),
+        },
+    }

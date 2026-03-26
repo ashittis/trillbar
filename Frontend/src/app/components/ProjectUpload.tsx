@@ -1,5 +1,5 @@
 import { Upload, Film, Loader2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
@@ -13,6 +13,16 @@ export function ProjectUpload() {
   const [isUploading, setIsUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [targetLang, setTargetLang] = useState("hi");
+  const [targetOptions, setTargetOptions] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    api.sessions.languages().then((langs) => {
+      setTargetOptions(langs.target);
+    }).catch(() => {
+      setTargetOptions({ hi: "Hindi", en: "English" });
+    });
+  }, []);
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -22,11 +32,13 @@ export function ProjectUpload() {
     try {
       const session = await api.sessions.create({
         name: file.name.replace(/\.[^/.]+$/, "") || "Untitled",
-        source_language: "ja",
-        target_language: "hi",
+        source_language: "auto",
+        target_language: targetLang,
       });
       setSession(session);
       await api.upload.video(session.id, file, (pct) => setUploadProgress(pct));
+      const updated = await api.sessions.get(session.id);
+      setSession(updated);
       toast.success("Upload complete — heading to Voice Lab");
       navigate("/voice-lab");
     } catch (err) {
@@ -81,6 +93,24 @@ export function ProjectUpload() {
               <Sparkles className="w-3.5 h-3.5" />
               <span>Sound-Alike Voice Matching • Word-Level Emotion Control</span>
             </div>
+          </div>
+
+          {/* Language selection */}
+          <div className="mb-6">
+            <label className="block text-[11px] uppercase tracking-wider mb-1.5" style={{ color: "var(--studio-text-muted)" }}>
+              Target Language
+            </label>
+            <select value={targetLang} onChange={(e) => setTargetLang(e.target.value)}
+              disabled={isUploading}
+              className="w-full px-3 py-2 rounded-lg text-[13px] border outline-none"
+              style={{ backgroundColor: "var(--studio-surface)", borderColor: "var(--studio-border)", color: "var(--studio-text-primary)" }}>
+              {Object.keys(targetOptions).length === 0 && (
+                <option value="" disabled>Loading…</option>
+              )}
+              {Object.entries(targetOptions).map(([code, name]) => (
+                <option key={code} value={code}>{name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Drop zone */}

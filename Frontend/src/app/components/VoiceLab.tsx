@@ -132,8 +132,9 @@ function VoiceCleanPanel({ actor, sessionId, onDone }: {
         const ev = JSON.parse(e.data);
         if (ev.status === "done") { onDone(ev.message); es.close(); }
         if (ev.status === "failed") { onFail(ev.error || ev.message); es.close(); }
-      } catch { /* ignore */ }
+      } catch { /* malformed SSE event, skip */ }
     };
+    es.onerror = () => { onFail("Lost connection to job"); es.close(); };
   };
 
   const handlePreview = async () => {
@@ -285,8 +286,9 @@ function CharacterPanel({ actor, actorIndex, sessionId }: {
             if (ev.status === "failed") toast.error(ev.error || "Clone failed");
             es.close();
           }
-        } catch { /* ignore */ }
+        } catch { /* malformed SSE event, skip */ }
       };
+      es.onerror = () => { toast.error("Lost connection to clone job"); es.close(); setCloneInProgress(false); };
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Clone failed");
       setCloneInProgress(false);
@@ -423,6 +425,16 @@ export function VoiceLab() {
   const queryClient = useQueryClient();
   const sessionId = useStudioStore((s) => s.sessionId);
   const session = useStudioStore((s) => s.session);
+  const setSession = useStudioStore((s) => s.setSession);
+
+  // Refetch session on mount to ensure status is fresh
+  useEffect(() => {
+    if (sessionId) {
+      api.sessions.get(sessionId).then(setSession).catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Failed to load session");
+      });
+    }
+  }, [sessionId]);
 
   const [extractionJobId, setExtractionJobId] = useState<string | null>(null);
   const [extractionStep, setExtractionStep] = useState<Step[]>([
@@ -484,8 +496,9 @@ export function VoiceLab() {
         });
         if (status === "done") { setExtractionDone(true); queryClient.invalidateQueries({ queryKey: ["actors", sessionId] }); es.close(); }
         if (status === "failed") { toast.error(ev.error || "Extraction failed"); es.close(); }
-      } catch { /* ignore */ }
+      } catch { /* malformed SSE event, skip */ }
     };
+    es.onerror = () => { toast.error("Lost connection to extraction job"); es.close(); };
     return () => es.close();
   }, [extractionJobId, sessionId, queryClient]);
 
@@ -497,10 +510,29 @@ export function VoiceLab() {
       try {
         const existing = await api.voiceLab.listActors(sessionId);
         if (existing.length > 0) { setExtractionDone(true); return; }
-      } catch { /* ignore */ }
+      } catch { /* first load, no actors yet */ }
       const status = useStudioStore.getState().session?.status;
       if (status === "ready") { setExtractionDone(true); return; }
-      if (status === "extracting") return;
+      if (status === "extracting") {
+        try {
+          const jobs = await api.voiceLab.listJobs(sessionId);
+          const activeJob = jobs.find(
+            (j) => j.job_type === "extract_actors"
+              && (j.status === "running" || j.status === "pending")
+          );
+          if (activeJob) {
+            setExtractionJobId(activeJob.id);
+            setExtractionStep((prev) =>
+              prev.map((s, i) => i === 0 ? { ...s, status: "running" } : s)
+            );
+          } else {
+            setExtractionDone(true);
+          }
+        } catch {
+          setExtractionDone(true);
+        }
+        return;
+      }
       try {
         const { job_id } = await api.voiceLab.startExtraction(sessionId);
         setExtractionJobId(job_id);
@@ -549,7 +581,7 @@ export function VoiceLab() {
           <button onClick={() => navigate("/dub-studio")} disabled={!allCloned}
             className="px-4 py-1.5 rounded text-[13px] flex items-center gap-2 transition-all hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ backgroundColor: "var(--studio-active)", color: "#fff" }}>
-            Complete All Voices <ArrowRight className="w-4 h-4" />
+            Continue to Dub Studio <ArrowRight className="w-4 h-4" />
           </button>
         </div>
       </div>

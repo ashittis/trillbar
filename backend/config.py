@@ -29,6 +29,13 @@ HF_TOKEN = os.getenv("HF_TOKEN", "")
 # Max upload size in bytes (500 MB)
 MAX_UPLOAD_BYTES = 500 * 1024 * 1024
 
+# CORS allowed origins (comma-separated in .env, or defaults for dev)
+CORS_ORIGINS = [
+    o.strip()
+    for o in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    if o.strip()
+]
+
 # Supported source languages
 SOURCE_LANGUAGES = {
     "ja": "Japanese",

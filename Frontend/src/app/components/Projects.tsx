@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Film, ChevronRight } from "lucide-react";
+import { Plus, Film, ChevronRight, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { api, SessionOut } from "../../lib/api";
 import { useStudioStore } from "../../lib/store";
 
@@ -10,6 +11,7 @@ const STATUS_COLOR: Record<string, string> = {
   extracting: "#FFB020",
   ready:      "#3CCB7F",
   dubbing:    "#FFB020",
+  rendering:  "#FFB020",
   done:       "#3CCB7F",
 };
 
@@ -19,6 +21,7 @@ const STATUS_LABEL: Record<string, string> = {
   extracting: "Extracting…",
   ready:      "Ready",
   dubbing:    "Dubbing…",
+  rendering:  "Rendering…",
   done:       "Done",
 };
 
@@ -28,16 +31,29 @@ export function Projects() {
   const [sessions, setSessions] = useState<SessionOut[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchSessions = () => {
     api.sessions.list()
       .then(setSessions)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchSessions(); }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this project? This cannot be undone.")) return;
+    try {
+      await api.sessions.delete(id);
+      fetchSessions();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete project");
+    }
+  };
 
   const handleOpen = (session: SessionOut) => {
     setSession(session);
-    if (session.status === "done" || session.status === "dubbing") {
+    if (["done", "dubbing", "rendering"].includes(session.status)) {
       navigate("/dub-studio");
     } else {
       navigate("/voice-lab");
@@ -122,6 +138,11 @@ export function Projects() {
                     >
                       {STATUS_LABEL[s.status] ?? s.status}
                     </span>
+                    <button onClick={(e) => handleDelete(e, s.id)}
+                      className="p-1 rounded hover:bg-white/10 transition-colors"
+                      title="Delete project">
+                      <Trash2 className="w-3.5 h-3.5" style={{ color: "var(--studio-text-muted)" }} />
+                    </button>
                     <ChevronRight className="w-3.5 h-3.5" style={{ color: "var(--studio-text-muted)" }} />
                   </div>
                 </button>
